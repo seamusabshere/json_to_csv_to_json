@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+ARGV[0] or "give me a csv to convert to json!"
+
+require 'csv'
+require 'json'
+
+
+blob = CSV.foreach(ARGV[0], headers: true).inject({}) do |memo, row|
+  outer_v = row.to_hash.reject do |k, v|
+    v.to_s.length == 0
+  end.inject({}) do |memo2, (k, v)|
+    memo2[k] = case v
+    when /,/
+      v.split /\s*,\s*/
+    when 'TRUE'
+      true
+    when 'FALSE'
+      false
+    else
+      v
+    end
+    memo2
+  end
+  outer_k = outer_v.delete 'k'
+  memo[outer_k] = outer_v
+  memo
+end
+
+puts JSON.pretty_generate(blob)
