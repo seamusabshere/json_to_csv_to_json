@@ -1,31 +1,53 @@
 #!/usr/bin/env ruby
 ARGV[0] or "give me a json to convert to csv!"
+NEWLINE_DELIMITED = ARGV.include?('--newline-delimited')
 
 require 'csv'
 require 'set'
 require 'json'
 
-blob = JSON.parse(IO.read(ARGV[0]))
-
-found_headers = Set.new
-blob.each do |_, v|
-  found_headers += v.keys
+def clean(v)
+  case v
+  when Hash
+    # give up, double encode
+    JSON.dump v
+  when Array
+    v.map { |vv| clean vv }.join ','
+  when String
+    memo = v.strip
+    memo.empty? ? nil : memo
+  else
+    v
+  end
 end
-found_headers = found_headers.to_a
 
-puts (['k'] + found_headers).to_csv
-
-blob.each do |k, v|
-  memo = v.values_at(*found_headers).map do |vv|
-    case vv
-    when Hash
-      raise "unsupported Hash #{v.inspect}"
-    when Array
-      # not using to_csv
-      vv.map(&:strip).join ','
-    else
-      vv
+if NEWLINE_DELIMITED
+  File.open(ARGV[0]) do |f|
+    count = 0
+    headers = Set.new
+    while line = f.gets
+      count += 1
+      break if count > 1000
+      headers += JSON.parse(line).keys
+    end
+    headers = headers.to_a
+    puts headers.to_csv
+    f.rewind
+    while line = f.gets
+      v = JSON.parse line
+      puts v.values_at(*headers).map { |vv| clean vv }.to_csv
     end
   end
-  puts ([k] + memo).to_csv
+else
+  blob = JSON.parse(IO.read(ARGV[0]))
+  headers = Set.new
+  blob.each do |_, v|
+    headers += v.keys
+  end
+  headers = headers.to_a
+  puts (['k'] + headers).to_csv
+  blob.each do |k, v|
+    memo = v.values_at(*headers).map { |vv| clean vv }
+    puts ([k] + memo).to_csv
+  end
 end
